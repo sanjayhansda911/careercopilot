@@ -165,10 +165,11 @@ export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise
   let totalUpdated = 0;
   let totalDuplicates = 0;
   const discoveredJobIds: string[] = [];
+  const candidateJobsMap = new Map<string, { job: RawATSJob; source: any }>();
 
-  for (const source of sourcesToScan) {
-    let rawJobs: RawATSJob[] = [];
-    try {
+  const fetchResults = await Promise.allSettled(
+    sourcesToScan.map(async (source) => {
+      let rawJobs: RawATSJob[] = [];
       if (source.type === 'greenhouse') {
         rawJobs = await fetchGreenhouseJobs(source.identifier, source.name);
       } else if (source.type === 'lever') {
@@ -176,102 +177,116 @@ export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise
       } else if (source.type === 'ashby') {
         rawJobs = await fetchAshbyJobs(source.identifier, source.name);
       } else if (source.type === 'linkedin') {
-        // Parse search query and location from identifier, e.g. "Product Manager in Hyderabad"
         const parts = source.identifier.split(' in ');
         const keywords = parts[0] || 'Product Manager';
         const location = parts[1] || (source.identifier.includes('Hyderabad') ? 'Hyderabad' : 'Remote');
-        rawJobs = await fetchLinkedInJobs(keywords, location, 2);
+        rawJobs = await fetchLinkedInJobs(keywords, location, 1);
       }
-    } catch (err: any) {
-      const msg = `Source ${source.name} error: ${err.message || String(err)}`;
+      return { source, rawJobs };
+    })
+  );
+
+  for (const res of fetchResults) {
+    if (res.status === 'rejected') {
+      const msg = `Source fetch error: ${res.reason?.message || String(res.reason)}`;
       errors.push(msg);
       console.warn(`[Discovery Agent] ${msg}`);
       continue;
     }
 
+    const { source, rawJobs } = res.value;
     totalScanned += rawJobs.length;
 
     // Filter relevant jobs by title keywords across all 3 tracks
-    const relevantJobs = rawJobs.filter(j => {
+    for (const j of rawJobs) {
       const titleLower = j.title.toLowerCase();
-      if (source.type === 'linkedin') {
-        return (
-          titleLower.includes('product') ||
-          titleLower.includes('pm') ||
-          titleLower.includes('operation') ||
-          titleLower.includes('partner') ||
-          roleKeywords.some(kw => titleLower.includes(kw))
-        );
-      }
-      return roleKeywords.some(kw => titleLower.includes(kw));
-    });
+      const isRelevant = source.type === 'linkedin'
+        ? (titleLower.includes('product') || titleLower.includes('pm') || titleLower.includes('operation') || titleLower.includes('partner') || roleKeywords.some(kw => titleLower.includes(kw)))
+        : roleKeywords.some(kw => titleLower.includes(kw));
 
-    for (const job of relevantJobs) {
-      try {
-        const canonicalUrl = normalizeJobUrl(job.job_url);
-        const assignedTrack = classifyJobTrack(job.title, job.description);
-
-        // Check if job already exists by canonical URL
-        const { data: existing } = await db
-          .from('jobs')
-          .select('id, status, description, track')
-          .eq('canonical_url', canonicalUrl)
-          .maybeSingle();
-
-        if (existing) {
-          totalDuplicates++;
-          // If description changed or track wasn't assigned, update
-          if ((existing.description !== job.description && job.description) || !existing.track) {
-            await db
-              .from('jobs')
-              .update({
-                description: job.description,
-                track: assignedTrack,
-                status: 'open',
-                is_active: true
-              })
-              .eq('id', existing.id);
-            totalUpdated++;
-          }
-          discoveredJobIds.push(existing.id);
-          continue;
+      if (isRelevant) {
+        const canonicalUrl = normalizeJobUrl(j.job_url);
+        if (!candidateJobsMap.has(canonicalUrl)) {
+          candidateJobsMap.set(canonicalUrl, { job: j, source });
         }
-
-        // Validate URL before inserting
-        const isValid = await validateJobUrl(canonicalUrl);
-
-        const { data: inserted, error: insertErr } = await db
-          .from('jobs')
-          .insert({
-            canonical_url: canonicalUrl,
-            title: job.title,
-            company: job.company,
-            location: job.location || (source.identifier.includes('Hyderabad') ? 'Hyderabad, Telangana' : 'India Remote / Hybrid'),
-            work_mode: job.work_mode || 'unspecified',
-            employment_type: job.employment_type || 'full_time',
-            job_url: canonicalUrl,
-            description: job.description,
-            salary_min_lpa: job.salary_min_lpa || null,
-            salary_max_lpa: job.salary_max_lpa || null,
-            salary_currency: 'INR',
-            salary_confidence: 'undisclosed',
-            track: assignedTrack,
-            status: isValid ? 'open' : 'unverified',
-            is_active: isValid,
-            posted_at: job.posted_at || new Date().toISOString()
-          })
-          .select('id')
-          .single();
-
-        if (insertErr) {
-          errors.push(`Failed to insert job ${job.title} at ${job.company}: ${insertErr.message}`);
-        } else if (inserted) {
-          totalAdded++;
-          discoveredJobIds.push(inserted.id);
-        }
-      } catch (err: any) {
-        errors.push(`Error processing job ${job.title}: ${err.message || String(err)}`);
       }
+    }
+  }
+
+  // Batch query existing jobs by canonical_url
+  const allUrls = Array.from(candidateJobsMap.keys());
+  const existingMap = new Map<string, any>();
+
+  if (allUrls.length > 0) {
+    try {
+      const { data: existingRecords } = await db
+        .from('jobs')
+        .select('id, canonical_url, status, description, track')
+        .in('canonical_url', allUrls);
+
+      for (const rec of existingRecords || []) {
+        existingMap.set(rec.canonical_url, rec);
+      }
+    } catch (err: any) {
+      console.warn('[Discovery Agent] Batch check error:', err);
+    }
+  }
+
+  for (const [canonicalUrl, { job, source }] of candidateJobsMap.entries()) {
+    try {
+      const assignedTrack = classifyJobTrack(job.title, job.description);
+      const existing = existingMap.get(canonicalUrl);
+
+      if (existing) {
+        totalDuplicates++;
+        if ((existing.description !== job.description && job.description) || !existing.track) {
+          await db
+            .from('jobs')
+            .update({
+              description: job.description,
+              track: assignedTrack,
+              status: 'open',
+              is_active: true
+            })
+            .eq('id', existing.id);
+          totalUpdated++;
+        }
+        discoveredJobIds.push(existing.id);
+        continue;
+      }
+
+      const isValid = await validateJobUrl(canonicalUrl);
+      const { data: inserted, error: insertErr } = await db
+        .from('jobs')
+        .insert({
+          canonical_url: canonicalUrl,
+          title: job.title,
+          company: job.company,
+          location: job.location || (source.identifier.includes('Hyderabad') ? 'Hyderabad, Telangana' : 'India Remote / Hybrid'),
+          work_mode: job.work_mode || 'unspecified',
+          employment_type: job.employment_type || 'full_time',
+          job_url: canonicalUrl,
+          description: job.description,
+          salary_min_lpa: job.salary_min_lpa || null,
+          salary_max_lpa: job.salary_max_lpa || null,
+          salary_currency: 'INR',
+          salary_confidence: 'undisclosed',
+          track: assignedTrack,
+          status: isValid ? 'open' : 'unverified',
+          is_active: isValid,
+          posted_at: job.posted_at || new Date().toISOString()
+        })
+        .select('id')
+        .single();
+
+      if (insertErr) {
+        errors.push(`Failed to insert job ${job.title} at ${job.company}: ${insertErr.message}`);
+      } else if (inserted) {
+        totalAdded++;
+        discoveredJobIds.push(inserted.id);
+      }
+    } catch (err: any) {
+      errors.push(`Error processing job ${job.title}: ${err.message || String(err)}`);
     }
   }
 

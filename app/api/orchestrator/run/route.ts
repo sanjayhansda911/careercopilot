@@ -50,7 +50,8 @@ export async function POST(req: NextRequest) {
       userId,
       userEmail,
       triggerSource,
-      maxJobsToAnalyze: body.maxJobsToAnalyze || 3
+      maxJobsToAnalyze: body.maxJobsToAnalyze || (triggerSource === 'manual' ? 1 : 5),
+      quickScan: body.quickScan ?? (triggerSource === 'manual')
     });
 
     return NextResponse.json({

@@ -186,7 +186,7 @@ export async function fetchAshbyJobs(boardToken: string, companyName: string): P
 export async function fetchLinkedInJobs(
   keywords: string = 'Product Manager',
   location: string = 'India',
-  maxPages: number = 2
+  maxPages: number = 1
 ): Promise<RawATSJob[]> {
   const jobs: RawATSJob[] = [];
   const pageSize = 10;
@@ -202,7 +202,7 @@ export async function fetchLinkedInJobs(
           'Accept': 'text/html,application/xhtml+xml',
           'Accept-Language': 'en-US,en;q=0.9'
         },
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(4000),
         next: { revalidate: 1800 }
       });
 

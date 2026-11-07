@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase/server';
-import { runDiscoveryAgent, DiscoveryResult } from './discovery';
+import { runDiscoveryAgent, DiscoveryResult, DEFAULT_TECH_SOURCES } from './discovery';
 import { runIntelligenceAgent } from './intelligence';
 import { runNotificationAgent, NotificationResult } from './notification';
 import { runAnalyticsAgent, AnalyticsDashboardData } from './analytics';
@@ -9,7 +9,8 @@ export interface OrchestratorRunOptions {
   userEmail?: string;
   triggerSource?: 'cron' | 'manual' | 'test';
   targetRoleKeywords?: string[];
-  maxJobsToAnalyze?: number; // default 5
+  maxJobsToAnalyze?: number; // default 5 for cron, 1-2 for manual
+  quickScan?: boolean;
 }
 
 export interface OrchestratorRunSummary {
@@ -129,11 +130,14 @@ export async function runOrchestrator(
     summary: ''
   };
 
+  const isQuick = options.quickScan ?? (options.triggerSource === 'manual');
+
   try {
     discoveryResult = await runDiscoveryAgent({
       userId,
       searchRunId: runId,
-      targetRoleKeywords: options.targetRoleKeywords || candidateProfile?.target_roles
+      targetRoleKeywords: options.targetRoleKeywords || candidateProfile?.target_roles,
+      sources: isQuick ? DEFAULT_TECH_SOURCES.slice(0, 2) : undefined
     });
     if (discoveryResult.errors.length > 0) {
       errors.push(...discoveryResult.errors);
@@ -152,7 +156,7 @@ export async function runOrchestrator(
   if (candidateProfile && verifiedFacts.length > 0) {
     try {
       // Find jobs that need intelligence analysis (unmatched or recently added)
-      const maxToAnalyze = options.maxJobsToAnalyze || 5;
+      const maxToAnalyze = options.maxJobsToAnalyze || (isQuick ? 1 : 5);
       let targetJobIds = discoveryResult.jobIds.slice(0, maxToAnalyze);
 
       // If discovery didn't add new jobs, pick existing open jobs lacking match evaluation
