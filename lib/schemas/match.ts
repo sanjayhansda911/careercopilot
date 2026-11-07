@@ -48,13 +48,19 @@ export const IntelligenceMatchResultSchema = z.object({
   recommendation: RecommendationCategorySchema,
   confidence_level: z.enum(['high', 'medium', 'low']).default('high'),
   score_breakdown: ScoreBreakdownSchema,
+  track: z.enum(['track_a', 'track_b', 'track_c']).default('track_a').optional(),
+  transition_type: z.string().optional(),
+  verdict: z.string().optional(),
   summary: z.string(),
   strengths: z.array(z.string()),
+  verified_supporting_facts: z.array(z.string()).default([]),
   transferable_skills: z.array(z.string()),
   missing_skills: z.array(z.string()),
+  unmet_requirements: z.array(z.string()).default([]),
   gaps: z.array(z.string()),
   interview_topics: z.array(z.string()),
   compensation_note: z.string(),
+  user_feedback: z.enum(['interested', 'not_interested', 'applied', 'rejected', 'interviewed', 'offered', 'not_relevant']).nullable().optional(),
   matching_evidence: z.record(z.unknown()).default({})
 });
 

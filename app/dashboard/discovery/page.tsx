@@ -12,6 +12,7 @@ export default function JobDiscoveryPage() {
   const [search, setSearch] = useState('');
   const [workMode, setWorkMode] = useState('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'linkedin' | 'portals'>('all');
+  const [trackFilter, setTrackFilter] = useState('all');
   const [showIngestModal, setShowIngestModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -145,6 +146,7 @@ export default function JobDiscoveryPage() {
     const url = j.job_url || j.canonical_url || '';
     if (sourceFilter === 'linkedin' && !url.includes('linkedin.com')) return false;
     if (sourceFilter === 'portals' && url.includes('linkedin.com')) return false;
+    if (trackFilter !== 'all' && j.track !== trackFilter) return false;
 
     if (!search.trim()) return true;
     const q = search.toLowerCase();
@@ -250,6 +252,29 @@ export default function JobDiscoveryPage() {
             </div>
           </div>
 
+          {/* Track Filters */}
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-3">
+            <span className="text-xs font-semibold text-slate-500 mr-1">Search Track:</span>
+            {[
+              { id: 'all', label: 'All Tracks' },
+              { id: 'track_a', label: 'Track A: Direct PM' },
+              { id: 'track_b', label: 'Track B: Product-Adjacent' },
+              { id: 'track_c', label: 'Track C: Senior Ops' }
+            ].map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTrackFilter(t.id)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  trackFilter === t.id
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex items-center space-x-2 border-t border-slate-100 pt-3">
             <span className="text-xs font-semibold text-slate-500">Work Mode:</span>
             {['all', 'remote', 'hybrid', 'on-site'].map(mode => (
@@ -278,6 +303,9 @@ export default function JobDiscoveryPage() {
           <div className="grid gap-4 md:grid-cols-2">
             {filteredJobs.map((j: any) => {
               const sourceBadge = getJobSourceBadge(j.job_url || j.canonical_url);
+              const isHyd = /hyderabad/i.test(j.location || '');
+              const isRem = /remote/i.test(j.work_mode || '') || /remote/i.test(j.location || '');
+
               return (
                 <div key={j.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3 flex flex-col justify-between hover:border-slate-300 transition">
                   <div>
@@ -286,7 +314,7 @@ export default function JobDiscoveryPage() {
                         <h3 className="text-base font-bold text-slate-900 leading-snug">{j.title}</h3>
                         <p className="text-xs font-semibold text-slate-600 mt-0.5">{j.company} • {j.location || 'India / Remote'}</p>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-col items-end gap-1 shrink-0">
                         <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${sourceBadge.color}`}>
                           {sourceBadge.label}
                         </span>
@@ -294,6 +322,26 @@ export default function JobDiscoveryPage() {
                           {j.work_mode || 'unspecified'}
                         </span>
                       </div>
+                    </div>
+
+                    {/* Track & Location Badges */}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        j.track === 'track_a' ? 'bg-purple-100 text-purple-800' :
+                        j.track === 'track_b' ? 'bg-sky-100 text-sky-800' : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {j.track === 'track_a' ? 'Track A: Direct PM' : j.track === 'track_b' ? 'Track B: Product-Adjacent' : 'Track C: Senior Ops'}
+                      </span>
+                      {isHyd && (
+                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                          📍 Hyderabad
+                        </span>
+                      )}
+                      {isRem && (
+                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                          🌐 Remote
+                        </span>
+                      )}
                     </div>
 
                     {j.salary_min_lpa ? (

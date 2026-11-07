@@ -78,10 +78,14 @@ async function main() {
       id: 'job-1',
       title: 'Senior Product Manager, Developer Platform',
       company: 'Acme SaaS Corp',
-      location: 'Bengaluru (Hybrid)',
+      location: 'Hyderabad, Telangana',
+      track: 'track_a' as const,
       total_score: 84,
       recommendation: 'apply_now',
-      strengths: ['Supported Microsoft Partner Center technical support across APAC/NA'],
+      salary_info: '₹24–28 LPA',
+      date_posted: '2026-11-01',
+      why_relevant: 'Supported Microsoft Partner Center technical support across APAC/NA',
+      main_gaps: 'Direct B2B roadmap ownership',
       job_url: 'https://careers.acme.com/jobs/spm'
     },
     {
@@ -89,15 +93,19 @@ async function main() {
       title: 'Product Operations Manager',
       company: 'CloudFlow Tech',
       location: 'Remote',
+      track: 'track_b' as const,
       total_score: 76,
       recommendation: 'review',
-      strengths: ['Led 23-member technical operations team, reduced backlog 40%'],
+      salary_info: 'Undisclosed (Target ₹22–28 LPA)',
+      date_posted: '2026-11-02',
+      why_relevant: 'Led 23-member technical operations team, reduced backlog 40%',
+      main_gaps: 'Requires cross-functional product group alignment history',
       job_url: 'https://careers.cloudflow.io/jobs/pm-ops'
     }
   ];
 
-  const digestHtml = buildDailyDigestHtml(sampleDigestJobs, 'Sanjay');
-  if (!digestHtml.includes('CareerPilot Daily Job Digest') || !digestHtml.includes('Acme SaaS Corp')) {
+  const digestHtml = buildDailyDigestHtml(sampleDigestJobs, undefined, 'Sanjay');
+  if (!digestHtml.includes('CareerPilot') || !digestHtml.includes('Acme SaaS Corp')) {
     throw new Error('Digest HTML template failed to include required job headers');
   }
   console.log('  - Generated Digest HTML length:', digestHtml.length, 'characters');

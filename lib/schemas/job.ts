@@ -23,6 +23,7 @@ export const JobRecordSchema = z.object({
   discovered_at: z.string().optional(),
   expires_at: z.string().nullable().optional(),
   status: z.enum(['open', 'closed', 'unverified']).default('open'),
+  track: z.enum(['track_a', 'track_b', 'track_c']).default('track_a').optional(),
   is_active: z.boolean().default(true)
 });
 
@@ -39,6 +40,7 @@ export const JobIngestInputSchema = z.object({
   salary_min_lpa: z.number().optional().nullable(),
   salary_max_lpa: z.number().optional().nullable(),
   salary_confidence: z.enum(['verified', 'advertised', 'estimated', 'undisclosed']).optional().default('undisclosed'),
+  track: z.enum(['track_a', 'track_b', 'track_c']).optional().default('track_a'),
   source_name: z.string().optional().default('Manual Entry')
 });
 

@@ -7,10 +7,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const minScore = parseInt(searchParams.get('minScore') || '0', 10);
     const recommendation = searchParams.get('recommendation');
+    const track = searchParams.get('track');
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id || '00000000-0000-0000-0000-000000000001';
+    const userId = user?.id || '070f26eb-1210-4a72-9fb7-4ec5edf05a13';
 
     const db = getSupabaseAdmin();
     let query = db
@@ -24,6 +25,10 @@ export async function GET(req: NextRequest) {
 
     if (recommendation && recommendation !== 'all') {
       query = query.eq('recommendation', recommendation);
+    }
+
+    if (track && track !== 'all') {
+      query = query.eq('track', track);
     }
 
     query = query.order('total_score', { ascending: false });
@@ -102,6 +107,36 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return NextResponse.json(
       { status: 'error', message: err.message || 'Failed to analyze candidate-job fit' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { matchId, feedback } = body;
+    if (!matchId || !feedback) {
+      return NextResponse.json({ error: 'matchId and feedback are required' }, { status: 400 });
+    }
+
+    const db = getSupabaseAdmin();
+    const { data: updated, error } = await db
+      .from('job_matches')
+      .update({ user_feedback: feedback })
+      .eq('id', matchId)
+      .select('id, user_feedback')
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    return NextResponse.json({
+      status: 'success',
+      match: updated
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { status: 'error', message: err.message || 'Failed to update match feedback' },
       { status: 500 }
     );
   }

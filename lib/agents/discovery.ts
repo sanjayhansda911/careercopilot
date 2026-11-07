@@ -34,34 +34,117 @@ export interface DiscoveryResult {
   summary: string;
 }
 
-// Default verified high-yield tech sources: LinkedIn + Top Company Career Portals
-const DEFAULT_TECH_SOURCES = [
-  // 1. LinkedIn Public Job Postings
-  { name: 'LinkedIn India (Product Management)', type: 'linkedin' as const, identifier: 'Product Manager in India' },
-  { name: 'LinkedIn Remote (Product & Platform)', type: 'linkedin' as const, identifier: 'Platform Product Manager in Remote' },
+// Three Career Search Tracks
+export type JobTrack = 'track_a' | 'track_b' | 'track_c';
 
-  // 2. High-Growth Tech Company Career Portals (Greenhouse, Lever, Ashby)
+export const TRACK_A_DIRECT_PM = [
+  'associate product manager',
+  'product manager',
+  'product manager ii',
+  'technical product manager',
+  'platform product manager',
+  'api product manager',
+  'b2b saas product manager',
+  'product manager - cloud',
+  'product manager - integrations',
+  'product manager - partner ecosystem',
+  'product manager - developer platform',
+  'product manager - ai products',
+  'product owner',
+  'product management specialist'
+];
+
+export const TRACK_B_PRODUCT_ADJACENT = [
+  'product operations manager',
+  'product operations lead',
+  'product operations',
+  'product enablement manager',
+  'technical program manager',
+  'platform operations manager',
+  'partner product manager',
+  'product strategy and operations',
+  'product strategy & operations',
+  'product implementation manager',
+  'product experience manager',
+  'technical product specialist',
+  'platform program manager',
+  'product analyst'
+];
+
+export const TRACK_C_SENIOR_TECH_OPS = [
+  'senior operations manager',
+  'technical operations manager',
+  'partner operations manager',
+  'senior manager - partner experience',
+  'partner experience manager',
+  'customer experience manager',
+  'customer success operations manager',
+  'service delivery manager',
+  'senior service delivery manager',
+  'support operations manager',
+  'cloud operations manager',
+  'microsoft partner ecosystem manager',
+  'partner enablement manager',
+  'technical account operations manager',
+  'business operations manager',
+  'senior manager - managed services',
+  'global operations manager'
+];
+
+export const ALL_TRACK_KEYWORDS = [
+  ...TRACK_A_DIRECT_PM,
+  ...TRACK_B_PRODUCT_ADJACENT,
+  ...TRACK_C_SENIOR_TECH_OPS
+];
+
+/**
+ * Classifies a job into one of the 3 career search tracks:
+ * - Track A: Direct Product Management
+ * - Track B: Product-Adjacent Roles
+ * - Track C: Senior Technology & Partner Operations
+ */
+export function classifyJobTrack(title: string, description: string = ''): JobTrack {
+  const t = title.toLowerCase();
+
+  for (const kw of TRACK_A_DIRECT_PM) {
+    if (t.includes(kw)) return 'track_a';
+  }
+  for (const kw of TRACK_B_PRODUCT_ADJACENT) {
+    if (t.includes(kw)) return 'track_b';
+  }
+  for (const kw of TRACK_C_SENIOR_TECH_OPS) {
+    if (t.includes(kw)) return 'track_c';
+  }
+
+  // Heuristic fallbacks
+  if (t.includes('product manager') || t.includes('apm') || t.includes('tpm') || t.includes('product owner')) {
+    return 'track_a';
+  }
+  if (t.includes('product') || t.includes('program') || t.includes('enablement')) {
+    return 'track_b';
+  }
+  return 'track_c';
+}
+
+// Default verified high-yield tech sources with Hyderabad & India Remote priority
+export const DEFAULT_TECH_SOURCES = [
+  // 1. LinkedIn Targeted Streams - Hyderabad, India Remote & Microsoft Ecosystem
+  { name: 'LinkedIn Hyderabad (Product Management)', type: 'linkedin' as const, identifier: 'Product Manager in Hyderabad' },
+  { name: 'LinkedIn Hyderabad (Product Ops & Platform)', type: 'linkedin' as const, identifier: 'Product Operations in Hyderabad' },
+  { name: 'LinkedIn Hyderabad (Partner & Tech Ops)', type: 'linkedin' as const, identifier: 'Operations Manager in Hyderabad' },
+  { name: 'LinkedIn Remote (Platform & PM)', type: 'linkedin' as const, identifier: 'Platform Product Manager in Remote' },
+  { name: 'LinkedIn India (Microsoft CSP & Partner Ops)', type: 'linkedin' as const, identifier: 'Partner Experience Manager in India' },
+
+  // 2. Tier 1 – Cloud Ecosystem & Microsoft Partners
   { name: 'Stripe', type: 'greenhouse' as const, identifier: 'stripe' },
   { name: 'GitLab', type: 'greenhouse' as const, identifier: 'gitlab' },
   { name: 'Cloudflare', type: 'greenhouse' as const, identifier: 'cloudflare' },
   { name: 'Elastic', type: 'greenhouse' as const, identifier: 'elastic' },
+
+  // 3. Tier 2 – B2B SaaS & Enterprise Platforms
   { name: 'Spotify', type: 'lever' as const, identifier: 'spotify' },
   { name: 'Linear', type: 'ashby' as const, identifier: 'linear' },
   { name: 'Ramp', type: 'ashby' as const, identifier: 'ramp' }
-];
-
-const DEFAULT_TARGET_KEYWORDS = [
-  'product manager',
-  'product operations',
-  'platform product',
-  'partner experience',
-  'associate product manager',
-  'technical product manager',
-  'lead product manager',
-  'director of product',
-  'head of product',
-  'staff product manager',
-  'principal product manager'
 ];
 
 /**
@@ -75,7 +158,7 @@ export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise
   const errors: string[] = [];
 
   const sourcesToScan = options.sources && options.sources.length > 0 ? options.sources : DEFAULT_TECH_SOURCES;
-  const roleKeywords = (options.targetRoleKeywords || DEFAULT_TARGET_KEYWORDS).map(k => k.toLowerCase());
+  const roleKeywords = (options.targetRoleKeywords || ALL_TRACK_KEYWORDS).map(k => k.toLowerCase());
 
   let totalScanned = 0;
   let totalAdded = 0;
@@ -93,10 +176,10 @@ export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise
       } else if (source.type === 'ashby') {
         rawJobs = await fetchAshbyJobs(source.identifier, source.name);
       } else if (source.type === 'linkedin') {
-        // Parse search query and location from identifier, e.g. "Product Manager in India"
+        // Parse search query and location from identifier, e.g. "Product Manager in Hyderabad"
         const parts = source.identifier.split(' in ');
         const keywords = parts[0] || 'Product Manager';
-        const location = parts[1] || (source.identifier.includes('India') ? 'India' : 'Remote');
+        const location = parts[1] || (source.identifier.includes('Hyderabad') ? 'Hyderabad' : 'Remote');
         rawJobs = await fetchLinkedInJobs(keywords, location, 2);
       }
     } catch (err: any) {
@@ -108,11 +191,17 @@ export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise
 
     totalScanned += rawJobs.length;
 
-    // Filter relevant jobs by title keywords
+    // Filter relevant jobs by title keywords across all 3 tracks
     const relevantJobs = rawJobs.filter(j => {
       const titleLower = j.title.toLowerCase();
       if (source.type === 'linkedin') {
-        return titleLower.includes('product') || titleLower.includes('pm') || roleKeywords.some(kw => titleLower.includes(kw));
+        return (
+          titleLower.includes('product') ||
+          titleLower.includes('pm') ||
+          titleLower.includes('operation') ||
+          titleLower.includes('partner') ||
+          roleKeywords.some(kw => titleLower.includes(kw))
+        );
       }
       return roleKeywords.some(kw => titleLower.includes(kw));
     });
@@ -120,22 +209,24 @@ export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise
     for (const job of relevantJobs) {
       try {
         const canonicalUrl = normalizeJobUrl(job.job_url);
+        const assignedTrack = classifyJobTrack(job.title, job.description);
 
         // Check if job already exists by canonical URL
         const { data: existing } = await db
           .from('jobs')
-          .select('id, status, description')
+          .select('id, status, description, track')
           .eq('canonical_url', canonicalUrl)
           .maybeSingle();
 
         if (existing) {
-          // If existing and open, count as duplicate; if description changed, update
           totalDuplicates++;
-          if (existing.description !== job.description && job.description) {
+          // If description changed or track wasn't assigned, update
+          if ((existing.description !== job.description && job.description) || !existing.track) {
             await db
               .from('jobs')
               .update({
                 description: job.description,
+                track: assignedTrack,
                 status: 'open',
                 is_active: true
               })
@@ -155,7 +246,7 @@ export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise
             canonical_url: canonicalUrl,
             title: job.title,
             company: job.company,
-            location: job.location || 'India Remote / Hybrid',
+            location: job.location || (source.identifier.includes('Hyderabad') ? 'Hyderabad, Telangana' : 'India Remote / Hybrid'),
             work_mode: job.work_mode || 'unspecified',
             employment_type: job.employment_type || 'full_time',
             job_url: canonicalUrl,
@@ -164,6 +255,7 @@ export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise
             salary_max_lpa: job.salary_max_lpa || null,
             salary_currency: 'INR',
             salary_confidence: 'undisclosed',
+            track: assignedTrack,
             status: isValid ? 'open' : 'unverified',
             is_active: isValid,
             posted_at: job.posted_at || new Date().toISOString()

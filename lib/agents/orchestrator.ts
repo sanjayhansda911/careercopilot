@@ -232,7 +232,15 @@ export async function runOrchestrator(
         userId,
         userEmail,
         triggerType: 'daily_digest',
-        minScoreThreshold: 65
+        minScoreThreshold: 65,
+        searchQualityReport: {
+          jobsDiscovered: discoveryResult.jobsScanned,
+          newJobsAdded: discoveryResult.jobsAdded,
+          duplicatesRemoved: discoveryResult.jobsSkippedDuplicates,
+          jobsAnalyzed,
+          strongMatches,
+          sourceFailures: discoveryResult.errors
+        }
       });
     } catch (err: any) {
       errors.push(`Notification step error: ${err.message || String(err)}`);
