@@ -42,7 +42,7 @@ export default function DashboardOverview() {
       const res = await fetch('/api/orchestrator/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxJobsToAnalyze: 3 })
+        body: JSON.stringify({ quickScan: true, maxJobsToAnalyze: 1 })
       });
       const data = await res.json();
       if (data.status === 'success') {
