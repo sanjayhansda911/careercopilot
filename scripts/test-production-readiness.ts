@@ -34,13 +34,76 @@ async function main() {
   console.log('================================================================\n');
 
   const db = getSupabaseAdmin();
-  const userA = '11111111-1111-4111-8111-111111111111';
-  const userB = '22222222-2222-4222-8222-222222222222';
+  let userA = '11111111-1111-4111-8111-111111111111';
+  let userB = '22222222-2222-4222-8222-222222222222';
+  const testJobId = '00000000-0000-4000-8000-000000000001';
+  const testJobId2 = '00000000-0000-4000-8000-000000000002';
+  const testFactId = '33333333-3333-4333-8333-333333333333';
   let passedTests = 0;
   const totalTests = 8;
 
+  // Ensure real users and jobs exist in Supabase (satisfies Foreign Key constraints)
+  try {
+    const { data: usersData } = await db.auth.admin.listUsers();
+    let uA = usersData?.users?.find((u: any) => u.email === 'test_user_a@careerpilot.test');
+    if (!uA) {
+      const createdA = await db.auth.admin.createUser({
+        email: 'test_user_a@careerpilot.test',
+        password: 'TestPassword123!',
+        email_confirm: true
+      });
+      uA = createdA.data?.user;
+    }
+    let uB = usersData?.users?.find((u: any) => u.email === 'test_user_b@careerpilot.test');
+    if (!uB) {
+      const createdB = await db.auth.admin.createUser({
+        email: 'test_user_b@careerpilot.test',
+        password: 'TestPassword123!',
+        email_confirm: true
+      });
+      uB = createdB.data?.user;
+    }
+    if (uA?.id) userA = uA.id;
+    if (uB?.id) userB = uB.id;
+
+    // Seed valid job records for foreign key constraints
+    await db.from('jobs').upsert({
+      id: testJobId,
+      canonical_url: 'https://careers.google.com/jobs/results/test-audit-job-1',
+      job_url: 'https://careers.google.com/jobs/results/test-audit-job-1',
+      title: 'Staff Product Manager',
+      company: 'CareerPilot Audit'
+    });
+    await db.from('jobs').upsert({
+      id: testJobId2,
+      canonical_url: 'https://careers.google.com/jobs/results/test-audit-job-2',
+      job_url: 'https://careers.google.com/jobs/results/test-audit-job-2',
+      title: 'Principal Product Manager',
+      company: 'CareerPilot Audit'
+    });
+
+    // Seed career profile and verified fact for User A
+    await db.from('career_profiles').upsert({
+      user_id: userA,
+      current_title: 'Digital Project Manager',
+      total_experience_years: 9,
+      target_roles: ['product manager', 'product operations'],
+      skills: ['Operations', 'Agile', 'Product Delivery']
+    }, { onConflict: 'user_id' });
+
+    await db.from('career_facts').upsert({
+      id: testFactId,
+      user_id: userA,
+      category: 'impact',
+      fact: 'Reduced open operational backlog by 40% through targeted operational improvements and cross-functional dependency management.',
+      metric_value: '-40%',
+      verification_status: 'verified'
+    });
+  } catch (seedErr) {
+    // Falls back to mock store UUIDs if admin auth is not available
+  }
+
   // Clean / setup test state
-  const testFactId = '33333333-3333-4333-8333-333333333333';
   const verifiedFactsUserA = [
     {
       id: testFactId,
@@ -85,16 +148,22 @@ async function main() {
   console.log('\n>>> [TEST 2/8: Cross-User Data Access & Ownership Isolation]');
   try {
     const testAppId = crypto.randomUUID();
-    const testJobId = crypto.randomUUID();
+
+    // Clean up any existing test applications
+    await db.from('applications').delete().in('job_id', [testJobId, testJobId2]);
 
     // Create an application owned by User A
-    await db.from('applications').insert({
+    const { error: insErr } = await db.from('applications').insert({
       id: testAppId,
       user_id: userA,
       job_id: testJobId,
       application_status: 'prepared',
       notes: 'Test application for User A'
     });
+
+    if (insErr) {
+      throw new Error(`Failed to insert test application: ${insErr.message}`);
+    }
 
     // User B attempts to approve User A's application
     let crossUserBlocked = false;
@@ -126,15 +195,18 @@ async function main() {
   console.log('\n>>> [TEST 3/8: Application Workflow State Transitions]');
   try {
     const testAppId = crypto.randomUUID();
-    const testJobId = crypto.randomUUID();
 
     // 1. Create fresh application in 'prepared' state
-    await db.from('applications').insert({
+    const { error: insErr } = await db.from('applications').insert({
       id: testAppId,
       user_id: userA,
-      job_id: testJobId,
+      job_id: testJobId2,
       application_status: 'prepared'
     });
+
+    if (insErr) {
+      throw new Error(`Failed to insert test application for Test 3: ${insErr.message}`);
+    }
 
     // 2. Attempt to submit directly from 'prepared' (skipping human approval)
     let directSubmissionBlocked = false;

@@ -103,7 +103,7 @@ export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise
         // Check if job already exists by canonical URL
         const { data: existing } = await db
           .from('jobs')
-          .select('id, status, description, updated_at')
+          .select('id, status, description')
           .eq('canonical_url', canonicalUrl)
           .maybeSingle();
 
