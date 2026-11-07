@@ -1,0 +1,18 @@
+{
+  "buildCommand": "next build",
+  "framework": "nextjs",
+  "functions": {
+    "app/api/orchestrator/run/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/discovery/jobs/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/orchestrator/run",
+      "schedule": "30 1 * * *"
+    }
+  ]
+}

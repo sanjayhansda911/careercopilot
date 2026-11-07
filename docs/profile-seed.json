@@ -1,0 +1,29 @@
+{
+  "profile": {
+    "target_track": "product_management",
+    "total_experience_years": 9,
+    "management_experience_years": null,
+    "current_title": "Digital Project Manager",
+    "current_company": "Sonata Software Ltd",
+    "current_domain": "Microsoft Partner Center Technical Support / CSP operations",
+    "target_roles": ["Associate Product Manager", "Product Manager", "Product Operations Manager", "Platform Product Manager", "Partner Experience Product Manager"],
+    "target_domains": ["B2B SaaS", "Cloud platforms", "Partner ecosystems", "Enterprise AI"],
+    "preferred_locations": ["Hyderabad", "India Remote", "Bengaluru"],
+    "target_ctc_min_lpa": 22,
+    "target_ctc_max_lpa": 28,
+    "notice_period_days": 90
+  },
+  "career_facts_to_verify": [
+    {"category":"experience","fact":"Digital Project Manager at Sonata Software Ltd, supporting Microsoft Partner Center Technical Support across APAC and North America, Apr 2025–present.","verification_status":"pending"},
+    {"category":"leadership","fact":"Led a 23-member team.","verification_status":"pending"},
+    {"category":"impact","fact":"Reduced open backlog by 40% through operational improvements and dependency management.","verification_status":"pending"},
+    {"category":"product_discovery","fact":"Analyzed Partner Center support trends and translated recurring partner friction into structured problem statements for Microsoft Product Groups.","verification_status":"pending"},
+    {"category":"experience","fact":"Customer Success Specialist at Sonata Software Ltd, Jan 2022–Mar 2025.","verification_status":"pending"},
+    {"category":"leadership","fact":"Resume references a 33-member support operation during Customer Success Specialist tenure.","verification_status":"pending"},
+    {"category":"customer_experience","fact":"Senior Systems Analyst tenure references sustained 4.8+ CSAT against a 4.7 target.","verification_status":"pending"},
+    {"category":"project","fact":"PMCoach.ai: solo 0-to-1 AI PM interview coach using Gemini Live API, Next.js, Supabase and Vercel.","verification_status":"pending"},
+    {"category":"project","fact":"Nagrik: civic grievance routing app covering eight civic categories across seven metros, built with React Native, Expo and Firebase.","verification_status":"pending"},
+    {"category":"education","fact":"AI Product Management Program, HelloPM, May 2026–October 2026.","verification_status":"pending"},
+    {"category":"education","fact":"B.Sc. Computer Science (Honours), St. Xavier's College, Kolkata, 2009.","verification_status":"pending"}
+  ]
+}
