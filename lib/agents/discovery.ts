@@ -5,6 +5,7 @@ import {
   fetchGreenhouseJobs,
   fetchLeverJobs,
   fetchAshbyJobs,
+  fetchLinkedInJobs,
   normalizeJobUrl,
   validateJobUrl
 } from '@/lib/adapters/ats';
@@ -15,8 +16,8 @@ export interface DiscoveryOptions {
   sources?: Array<{
     id?: string;
     name: string;
-    type: 'greenhouse' | 'lever' | 'ashby' | 'tinyfish' | 'manual';
-    identifier: string; // e.g. 'stripe', 'figma'
+    type: 'greenhouse' | 'lever' | 'ashby' | 'linkedin' | 'tinyfish' | 'manual';
+    identifier: string; // e.g. 'stripe', 'cloudflare', 'Product Manager India'
   }>;
   targetRoleKeywords?: string[];
   locationKeywords?: string[];
@@ -33,12 +34,20 @@ export interface DiscoveryResult {
   summary: string;
 }
 
-// Default verified high-yield tech sources targeting Product Management & Engineering
+// Default verified high-yield tech sources: LinkedIn + Top Company Career Portals
 const DEFAULT_TECH_SOURCES = [
+  // 1. LinkedIn Public Job Postings
+  { name: 'LinkedIn India (Product Management)', type: 'linkedin' as const, identifier: 'Product Manager in India' },
+  { name: 'LinkedIn Remote (Product & Platform)', type: 'linkedin' as const, identifier: 'Platform Product Manager in Remote' },
+
+  // 2. High-Growth Tech Company Career Portals (Greenhouse, Lever, Ashby)
+  { name: 'Stripe', type: 'greenhouse' as const, identifier: 'stripe' },
   { name: 'GitLab', type: 'greenhouse' as const, identifier: 'gitlab' },
-  { name: 'Figma', type: 'lever' as const, identifier: 'figma' },
-  { name: 'Postman', type: 'greenhouse' as const, identifier: 'postman' },
-  { name: 'Linear', type: 'ashby' as const, identifier: 'linear' }
+  { name: 'Cloudflare', type: 'greenhouse' as const, identifier: 'cloudflare' },
+  { name: 'Elastic', type: 'greenhouse' as const, identifier: 'elastic' },
+  { name: 'Spotify', type: 'lever' as const, identifier: 'spotify' },
+  { name: 'Linear', type: 'ashby' as const, identifier: 'linear' },
+  { name: 'Ramp', type: 'ashby' as const, identifier: 'ramp' }
 ];
 
 const DEFAULT_TARGET_KEYWORDS = [
@@ -49,12 +58,15 @@ const DEFAULT_TARGET_KEYWORDS = [
   'associate product manager',
   'technical product manager',
   'lead product manager',
-  'director of product'
+  'director of product',
+  'head of product',
+  'staff product manager',
+  'principal product manager'
 ];
 
 /**
- * Discovery Agent: searches configured sources, normalizes, deduplicates,
- * validates, detects expired listings, and stores jobs in Supabase.
+ * Discovery Agent: searches configured sources (LinkedIn & Company Career Portals),
+ * normalizes, deduplicates, validates, detects expired listings, and stores jobs in Supabase.
  */
 export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise<DiscoveryResult> {
   const startTime = Date.now();
@@ -80,6 +92,12 @@ export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise
         rawJobs = await fetchLeverJobs(source.identifier, source.name);
       } else if (source.type === 'ashby') {
         rawJobs = await fetchAshbyJobs(source.identifier, source.name);
+      } else if (source.type === 'linkedin') {
+        // Parse search query and location from identifier, e.g. "Product Manager in India"
+        const parts = source.identifier.split(' in ');
+        const keywords = parts[0] || 'Product Manager';
+        const location = parts[1] || (source.identifier.includes('India') ? 'India' : 'Remote');
+        rawJobs = await fetchLinkedInJobs(keywords, location, 2);
       }
     } catch (err: any) {
       const msg = `Source ${source.name} error: ${err.message || String(err)}`;
@@ -93,6 +111,9 @@ export async function runDiscoveryAgent(options: DiscoveryOptions = {}): Promise
     // Filter relevant jobs by title keywords
     const relevantJobs = rawJobs.filter(j => {
       const titleLower = j.title.toLowerCase();
+      if (source.type === 'linkedin') {
+        return titleLower.includes('product') || titleLower.includes('pm') || roleKeywords.some(kw => titleLower.includes(kw));
+      }
       return roleKeywords.some(kw => titleLower.includes(kw));
     });
 

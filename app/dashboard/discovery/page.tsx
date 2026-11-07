@@ -7,8 +7,11 @@ import { Navbar } from '@/components/navigation/Navbar';
 export default function JobDiscoveryPage() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [workMode, setWorkMode] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'linkedin' | 'portals'>('all');
   const [showIngestModal, setShowIngestModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -32,7 +35,7 @@ export default function JobDiscoveryPage() {
   async function fetchJobs() {
     setLoading(true);
     try {
-      let url = '/api/discovery/jobs?status=all';
+      let url = '/api/discovery/jobs?status=all&limit=100';
       if (workMode !== 'all') url += `&work_mode=${workMode}`;
       const res = await fetch(url);
       const data = await res.json();
@@ -43,6 +46,31 @@ export default function JobDiscoveryPage() {
       console.warn('Failed to fetch jobs:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleTriggerScan() {
+    setScanning(true);
+    setScanMessage(null);
+    try {
+      const res = await fetch('/api/discovery/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setScanMessage(
+          `✓ Scan complete: Scanned ${data.discovery.jobsScanned} listings across LinkedIn & Company Portals. Added ${data.discovery.jobsAdded} new jobs (${data.discovery.jobsSkippedDuplicates} deduplicated).`
+        );
+        await fetchJobs();
+      } else {
+        setScanMessage(`Scan completed with message: ${data.message || 'Done'}`);
+      }
+    } catch (err: any) {
+      setScanMessage(`Scan error: ${err.message || String(err)}`);
+    } finally {
+      setScanning(false);
     }
   }
 
@@ -92,7 +120,32 @@ export default function JobDiscoveryPage() {
     }
   }
 
+  function getJobSourceBadge(url: string) {
+    if (!url) return { label: 'Company Portal', color: 'bg-slate-100 text-slate-700 border-slate-200' };
+    const lower = url.toLowerCase();
+    if (lower.includes('linkedin.com')) {
+      return { label: 'LinkedIn', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+    }
+    if (lower.includes('greenhouse.io')) {
+      return { label: 'Greenhouse Portal', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    }
+    if (lower.includes('lever.co')) {
+      return { label: 'Lever Portal', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+    }
+    if (lower.includes('ashbyhq.com')) {
+      return { label: 'Ashby Portal', color: 'bg-purple-50 text-purple-700 border-purple-200' };
+    }
+    return { label: 'Company Portal', color: 'bg-slate-100 text-slate-700 border-slate-200' };
+  }
+
+  const linkedinJobsCount = jobs.filter(j => (j.job_url || j.canonical_url || '').includes('linkedin.com')).length;
+  const portalJobsCount = jobs.length - linkedinJobsCount;
+
   const filteredJobs = jobs.filter((j: any) => {
+    const url = j.job_url || j.canonical_url || '';
+    if (sourceFilter === 'linkedin' && !url.includes('linkedin.com')) return false;
+    if (sourceFilter === 'portals' && url.includes('linkedin.com')) return false;
+
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
@@ -110,32 +163,94 @@ export default function JobDiscoveryPage() {
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Job Discovery Hub (Agent 1)</h1>
+            <div className="flex items-center space-x-2">
+              <h1 className="text-2xl font-bold text-slate-900">Job Discovery Hub</h1>
+              <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+                Agent 1
+              </span>
+            </div>
             <p className="mt-1 text-sm text-slate-500">
-              Normalized job pipeline from configured public ATS adapters and manual ingestion.
+              Live automated job aggregation from <strong>LinkedIn</strong> and major <strong>Company Career Portals</strong> (Stripe, GitLab, Cloudflare, Elastic, Spotify, Linear, Ramp).
             </p>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleTriggerScan}
+              disabled={scanning}
+              className={`inline-flex items-center rounded-lg px-4 py-2 text-xs font-bold text-white shadow-sm transition ${
+                scanning ? 'bg-blue-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
+            >
+              {scanning ? (
+                <>
+                  <svg className="mr-2 h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Scanning Portals & LinkedIn...
+                </>
+              ) : (
+                '⚡ Scan LinkedIn & Company Portals'
+              )}
+            </button>
             <button
               onClick={() => setShowIngestModal(true)}
               className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700"
             >
-              + Add Job Manually
+              + Ingest URL / Job
             </button>
           </div>
         </div>
 
-        {/* Filters & Search */}
-        <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <input
-            type="text"
-            placeholder="Search by title, company, or city..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none sm:max-w-xs"
-          />
+        {/* Scan Feedback Banner */}
+        {scanMessage && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-medium text-emerald-800 shadow-sm flex items-center justify-between">
+            <span>{scanMessage}</span>
+            <button onClick={() => setScanMessage(null)} className="text-emerald-600 hover:text-emerald-900 font-bold ml-4">✕</button>
+          </div>
+        )}
 
-          <div className="flex items-center space-x-2">
+        {/* Filters & Search */}
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <input
+              type="text"
+              placeholder="Search by title, company, or city..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none sm:max-w-xs"
+            />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500">Source:</span>
+              <button
+                onClick={() => setSourceFilter('all')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  sourceFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                All Sources ({jobs.length})
+              </button>
+              <button
+                onClick={() => setSourceFilter('linkedin')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  sourceFilter === 'linkedin' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                }`}
+              >
+                LinkedIn ({linkedinJobsCount})
+              </button>
+              <button
+                onClick={() => setSourceFilter('portals')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  sourceFilter === 'portals' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                }`}
+              >
+                Company Career Portals ({portalJobsCount})
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 border-t border-slate-100 pt-3">
             <span className="text-xs font-semibold text-slate-500">Work Mode:</span>
             {['all', 'remote', 'hybrid', 'on-site'].map(mode => (
               <button
@@ -151,62 +266,70 @@ export default function JobDiscoveryPage() {
           </div>
         </div>
 
-        {/* Jobs List */}
+        {/* Jobs Grid */}
         {loading ? (
-          <div className="p-12 text-center text-xs text-slate-400">Loading discovered jobs...</div>
+          <div className="p-12 text-center text-xs text-slate-400">Loading discovered jobs from Supabase...</div>
         ) : filteredJobs.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-12 text-center">
             <p className="text-sm font-semibold text-slate-700">No jobs match your filter</p>
-            <p className="mt-1 text-xs text-slate-400">Try broadening your search or ingest a job posting manually.</p>
+            <p className="mt-1 text-xs text-slate-400">Try running the Discovery Agent or broadening your filter criteria.</p>
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {filteredJobs.map((j: any) => (
-              <div key={j.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900">{j.title}</h3>
-                      <p className="text-xs font-semibold text-slate-600">{j.company} • {j.location || 'India'}</p>
+            {filteredJobs.map((j: any) => {
+              const sourceBadge = getJobSourceBadge(j.job_url || j.canonical_url);
+              return (
+                <div key={j.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3 flex flex-col justify-between hover:border-slate-300 transition">
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="pr-2">
+                        <h3 className="text-base font-bold text-slate-900 leading-snug">{j.title}</h3>
+                        <p className="text-xs font-semibold text-slate-600 mt-0.5">{j.company} • {j.location || 'India / Remote'}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${sourceBadge.color}`}>
+                          {sourceBadge.label}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold capitalize text-slate-700">
+                          {j.work_mode || 'unspecified'}
+                        </span>
+                      </div>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold capitalize text-slate-700">
-                      {j.work_mode || 'unspecified'}
-                    </span>
+
+                    {j.salary_min_lpa ? (
+                      <p className="mt-2 text-xs font-semibold text-emerald-700">
+                        ₹{j.salary_min_lpa} - {j.salary_max_lpa} LPA ({j.salary_confidence})
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs font-medium text-slate-400">
+                        Salary undisclosed
+                      </p>
+                    )}
+
+                    <p className="mt-2 text-xs text-slate-600 line-clamp-3">
+                      {j.description}
+                    </p>
                   </div>
 
-                  {j.salary_min_lpa ? (
-                    <p className="mt-2 text-xs font-semibold text-emerald-700">
-                      ₹{j.salary_min_lpa} - {j.salary_max_lpa} LPA ({j.salary_confidence})
-                    </p>
-                  ) : (
-                    <p className="mt-2 text-xs font-medium text-slate-400">
-                      Salary undisclosed
-                    </p>
-                  )}
-
-                  <p className="mt-2 text-xs text-slate-600 line-clamp-3">
-                    {j.description}
-                  </p>
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                    <a
+                      href={j.job_url || j.canonical_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+                    >
+                      View on {sourceBadge.label.split(' ')[0]} ↗
+                    </a>
+                    <Link
+                      href={`/dashboard/intelligence?jobId=${j.id}`}
+                      className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                    >
+                      Evaluate Fit (Agent 2) →
+                    </Link>
+                  </div>
                 </div>
-
-                <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-                  <a
-                    href={j.job_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-semibold text-slate-500 hover:text-slate-800"
-                  >
-                    View Source Listing ↗
-                  </a>
-                  <Link
-                    href={`/dashboard/intelligence`}
-                    className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100"
-                  >
-                    Evaluate Match →
-                  </Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -215,9 +338,13 @@ export default function JobDiscoveryPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
               <div className="flex items-center justify-between border-b pb-3">
-                <h3 className="text-base font-bold text-slate-900">Add Job Listing (Manual Ingest)</h3>
+                <h3 className="text-base font-bold text-slate-900">Add / Ingest Job Listing</h3>
                 <button onClick={() => setShowIngestModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
               </div>
+
+              <p className="text-xs text-slate-500">
+                Paste any <strong>LinkedIn job URL</strong> (<code className="bg-slate-100 px-1 py-0.5 rounded">linkedin.com/jobs/view/...</code>) or company career portal link to automatically ingest and normalize it.
+              </p>
 
               {ingestError && (
                 <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700">
@@ -244,52 +371,81 @@ export default function JobDiscoveryPage() {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Acme Tech"
+                      placeholder="e.g. Google, Stripe, PhonePe"
                       value={ingestForm.company}
                       onChange={e => setIngestForm({ ...ingestForm, company: e.target.value })}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
                     />
                   </div>
+
                   <div>
-                    <label className="text-xs font-semibold text-slate-700">Location</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Bengaluru / Remote"
-                      value={ingestForm.location}
-                      onChange={e => setIngestForm({ ...ingestForm, location: e.target.value })}
+                    <label className="text-xs font-semibold text-slate-700">Work Mode</label>
+                    <select
+                      value={ingestForm.work_mode}
+                      onChange={e => setIngestForm({ ...ingestForm, work_mode: e.target.value })}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
-                    />
+                    >
+                      <option value="unspecified">Unspecified</option>
+                      <option value="remote">Remote</option>
+                      <option value="hybrid">Hybrid</option>
+                      <option value="on-site">On-site</option>
+                    </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-700">Application URL *</label>
+                  <label className="text-xs font-semibold text-slate-700">Job Posting / Application URL *</label>
                   <input
                     type="url"
                     required
-                    placeholder="https://careers.acme.com/jobs/..."
+                    placeholder="https://www.linkedin.com/jobs/view/... or company portal"
                     value={ingestForm.job_url}
                     onChange={e => setIngestForm({ ...ingestForm, job_url: e.target.value })}
                     className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
                   />
                 </div>
 
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">Location</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Bengaluru, Hyderabad, India Remote"
+                    value={ingestForm.location}
+                    onChange={e => setIngestForm({ ...ingestForm, location: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700">Job Description *</label>
+                  <textarea
+                    required
+                    rows={4}
+                    placeholder="Paste job description text..."
+                    value={ingestForm.description}
+                    onChange={e => setIngestForm({ ...ingestForm, description: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-semibold text-slate-700">Min Salary (LPA)</label>
+                    <label className="text-xs font-semibold text-slate-700">Min Salary (INR LPA)</label>
                     <input
                       type="number"
-                      placeholder="e.g. 24"
+                      step="0.5"
+                      placeholder="e.g. 25"
                       value={ingestForm.salary_min_lpa}
                       onChange={e => setIngestForm({ ...ingestForm, salary_min_lpa: e.target.value })}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-700">Max Salary (LPA)</label>
+                    <label className="text-xs font-semibold text-slate-700">Max Salary (INR LPA)</label>
                     <input
                       type="number"
-                      placeholder="e.g. 28"
+                      step="0.5"
+                      placeholder="e.g. 35"
                       value={ingestForm.salary_max_lpa}
                       onChange={e => setIngestForm({ ...ingestForm, salary_max_lpa: e.target.value })}
                       className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
@@ -297,19 +453,7 @@ export default function JobDiscoveryPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-slate-700">Job Description (JD) *</label>
-                  <textarea
-                    rows={4}
-                    required
-                    placeholder="Paste job description, responsibilities, and qualifications..."
-                    value={ingestForm.description}
-                    onChange={e => setIngestForm({ ...ingestForm, description: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900"
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-2 pt-3 border-t">
+                <div className="flex justify-end space-x-3 pt-3">
                   <button
                     type="button"
                     onClick={() => setShowIngestModal(false)}
@@ -322,7 +466,7 @@ export default function JobDiscoveryPage() {
                     disabled={submitting}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                   >
-                    {submitting ? 'Ingesting...' : 'Ingest Job Record'}
+                    {submitting ? 'Ingesting...' : 'Save & Ingest'}
                   </button>
                 </div>
               </form>
