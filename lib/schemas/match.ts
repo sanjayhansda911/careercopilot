@@ -41,6 +41,22 @@ export const RecommendationCategorySchema = z.enum([
 
 export type RecommendationCategory = z.infer<typeof RecommendationCategorySchema>;
 
+export const OpportunityClassificationSchema = z.enum([
+  'direct_pm',                        // Direct PM opportunity
+  'product_adjacent_stepping_stone',  // Product-adjacent stepping stone
+  'tech_ops_leadership',             // Technology/operations leadership alternative
+  'poor_fit'                         // Poor fit
+]);
+
+export type OpportunityClassification = z.infer<typeof OpportunityClassificationSchema>;
+
+export const OpportunityClassificationLabels: Record<OpportunityClassification, string> = {
+  direct_pm: 'Direct PM opportunity',
+  product_adjacent_stepping_stone: 'Product-adjacent stepping stone',
+  tech_ops_leadership: 'Technology/operations leadership alternative',
+  poor_fit: 'Poor fit'
+};
+
 export const IntelligenceMatchResultSchema = z.object({
   job_id: z.string().optional(),
   user_id: z.string().optional(),
@@ -49,9 +65,19 @@ export const IntelligenceMatchResultSchema = z.object({
   confidence_level: z.enum(['high', 'medium', 'low']).default('high'),
   score_breakdown: ScoreBreakdownSchema,
   track: z.enum(['track_a', 'track_b', 'track_c']).default('track_a').optional(),
+  classification: OpportunityClassificationSchema.default('direct_pm'),
   transition_type: z.string().optional(),
   verdict: z.string().optional(),
   summary: z.string(),
+  why_apply: z.string().optional(),
+  why_not_shortlisted: z.string().optional(),
+  competitive_evidence: z.array(z.string()).default([]),
+  gaps_to_address: z.array(z.string()).default([]),
+  long_term_strategy_fit: z.string().optional(),
+  actual_responsibilities: z.array(z.string()).default([]),
+  mandatory_requirements: z.array(z.string()).default([]),
+  preferred_requirements: z.array(z.string()).default([]),
+  deal_breakers_or_missing_info: z.array(z.string()).default([]),
   strengths: z.array(z.string()),
   verified_supporting_facts: z.array(z.string()).default([]),
   transferable_skills: z.array(z.string()),
@@ -65,3 +91,4 @@ export const IntelligenceMatchResultSchema = z.object({
 });
 
 export type IntelligenceMatchResult = z.infer<typeof IntelligenceMatchResultSchema>;
+

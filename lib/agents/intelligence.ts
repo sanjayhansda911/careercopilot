@@ -5,6 +5,8 @@ import {
   ScoringWeights,
   ScoreBreakdown,
   RecommendationCategory,
+  OpportunityClassification,
+  OpportunityClassificationSchema,
   IntelligenceMatchResult
 } from '@/lib/schemas/match';
 import { analyzeJobDescription, JobAnalysis } from '@/lib/ai/agents';
@@ -50,8 +52,18 @@ export interface IntelligenceAgentOptions {
 }
 
 const SemanticIntelligenceSchema = z.object({
+  classification: OpportunityClassificationSchema.catch('direct_pm').default('direct_pm'),
   summary: z.string().nullish().transform(v => v || ''),
   executive_summary: z.string().nullish(),
+  why_apply: z.string().nullish().transform(v => v || ''),
+  why_not_shortlisted: z.string().nullish().transform(v => v || ''),
+  competitive_evidence: z.array(z.string()).nullish().transform(v => v || []),
+  gaps_to_address: z.array(z.string()).nullish().transform(v => v || []),
+  long_term_strategy_fit: z.string().nullish().transform(v => v || ''),
+  actual_responsibilities: z.array(z.string()).nullish().transform(v => v || []),
+  mandatory_requirements: z.array(z.string()).nullish().transform(v => v || []),
+  preferred_requirements: z.array(z.string()).nullish().transform(v => v || []),
+  deal_breakers_or_missing_info: z.array(z.string()).nullish().transform(v => v || []),
   strengths: z.array(z.string()).nullish().transform(v => v || []),
   verified_supporting_facts: z.array(z.string()).nullish().transform(v => v || []),
   transferable_skills: z.array(z.string()).nullish().transform(v => v || []),
@@ -209,8 +221,10 @@ export function calculateWeightedScore(
 }
 
 /**
- * Agent 2: Intelligence Agent
- * Combines deterministic 7-factor scoring with executive recruiter semantic analysis.
+ * Agent 2: Job Intelligence Agent
+ * Independently evaluates whether a discovered job is genuinely suitable for the candidate.
+ * Follows the 10-step evaluation protocol, assigns one of 4 Opportunity Classifications,
+ * and answers the 5 explicit recruiter explanation dimensions with zero score inflation.
  */
 export async function runIntelligenceAgent(
   options: IntelligenceAgentOptions
@@ -221,53 +235,93 @@ export async function runIntelligenceAgent(
   // 1. Determine Track
   const assignedTrack: JobTrack = options.job.track || classifyJobTrack(options.job.title, options.job.description);
 
-  // 2. Calculate deterministic numerical score
-  const scoreResult = calculateWeightedScore(
+  // 2. Calculate baseline deterministic score
+  let scoreResult = calculateWeightedScore(
     options.job,
     options.profile,
     options.verifiedFacts,
     options.weights
   );
 
-  // 3. Run Gemini for recruiter-level semantic analysis across the 6 dimensions
-  const prompt = `You are CareerPilot's executive talent recruiter analyzing a job opportunity for a candidate's career transition.
+  // 3. Run Gemini under the strict Job Intelligence Agent Charter
+  const prompt = `You are CareerPilot's Job Intelligence Agent.
 
-Target Job:
+Your responsibility is to independently evaluate whether a discovered job is genuinely suitable for the candidate.
+Do not simply repeat the Discovery Agent's assessment.
+
+FOR EVERY JOB, EXECUTE THIS 10-STEP EVALUATION PROTOCOL:
+1. Read the full job description.
+2. Identify the actual responsibilities rather than relying on the job title.
+3. Identify mandatory versus preferred requirements.
+4. Compare requirements with verified candidate facts.
+5. Distinguish formal Product Management experience from transferable product-adjacent experience.
+6. Evaluate seniority and scope realistically.
+7. Identify whether the role provides a credible transition into Product Management.
+8. Assess compensation and location compatibility.
+9. Identify deal-breakers and missing information.
+10. Provide an evidence-backed recommendation.
+
+TARGET JOB DETAILS:
 Title: ${options.job.title}
 Company: ${options.job.company}
 Location: ${options.job.location || 'Unspecified'}
-Classified Track: ${assignedTrack === 'track_a' ? 'Track A – Direct Product Management' : assignedTrack === 'track_b' ? 'Track B – Product-Adjacent' : 'Track C – Senior Technology & Partner Operations'}
-Description:
-${options.job.description.slice(0, 3500)}
+Track Hint: ${assignedTrack}
+Full Description:
+${options.job.description.slice(0, 3800)}
 
-Candidate Profile & Source of Truth:
-Current: ${options.profile.current_title || 'Team Manager / Digital Project Manager'} at ${options.profile.current_company || 'Sonata Software'} (${options.profile.total_experience_years || 10} years total, 4 years management)
-Core Domain: Microsoft Partner Center Technical Support, Microsoft Cloud Solution Provider (CSP) ecosystem, REST APIs, GDAP security workspace, partner sandboxes, partner enablement.
-Leadership: Directly leads a 20-23 person technical operations team; SLA compliance, CSAT, 40% backlog reduction, QBRs.
-Product Foundation: Completed HelloPM AI Product Management programme; independently built AI product prototypes (PMCoach.ai, Nagrik). PRDs, JTBD, MVP scoping.
-Target CTC: ₹22–28 LPA (current ₹14.55 LPA, target take-home ~₹2L/month). Notice: 90 days. Primary location: Hyderabad & India Remote.
+CANDIDATE SOURCE OF TRUTH (VERIFIED FACTS):
+- Current Role: ${options.profile.current_title || 'Team Manager / Digital Project Manager'} at ${options.profile.current_company || 'Sonata Software'}
+- Total Experience: ${options.profile.total_experience_years || 10} years total, 4 years people/operations management
+- Primary Domain: Microsoft Partner Center Technical Support, Cloud Solution Provider (CSP) ecosystem, REST APIs, GDAP security workspace, partner sandboxes, partner enablement.
+- Team Leadership: Directly manages 20-23 technical support specialists; SLA compliance, CSAT, 40% backlog reduction, quarterly business reviews (QBRs).
+- Product Management Foundation: Completed HelloPM AI Product Management programme; independently built AI product prototypes (PMCoach.ai, Nagrik). PRDs, user problem definitions (JTBD), MVP scoping.
+- Compensation Target: ₹22–28 LPA (current ₹14.55 LPA, target take-home ~₹2L/month).
+- Notice Period: 90 days.
+- Location Priorities: Hyderabad primary, India Remote, Bengaluru/Pune secondary.
 
-CRITICAL RULES:
-- The candidate has strong product-adjacent experience but has NOT held a conventional full-time PM title.
-- Do NOT represent operational experience as formal PM experience.
-- Never flatter or fabricate evidence. Be selective, honest, and evidence-driven.
-- Do not recommend senior PM roles requiring 5+ years of roadmap and commercial P&L ownership.
+CRITICAL RECRUITER RULES:
+- Never inflate match scores.
+- A role with "Product Manager" in the title may be a POOR FIT if it mandates 5+ years of dedicated commercial SaaS P&L and roadmap ownership.
+- A role with "Operations" or "Program" in the title may be a HIGH-VALUE STEPPING STONE into PM.
+- The candidate has NOT held a formal full-time PM title in corporate employment. Never fabricate or conflate operational leadership with commercial product roadmap ownership.
+- Value honesty, realism, and strategic career transition judgment.
 
-Instructions:
-Return a JSON object with this exact structure:
+CLASSIFY OPPORTUNITIES INTO EXACTLY ONE OF:
+- "direct_pm" (Direct PM opportunity - credible direct entry leveraging domain/API depth)
+- "product_adjacent_stepping_stone" (Product-adjacent stepping stone - Product Ops, TPM, Enablement with direct product proximity)
+- "tech_ops_leadership" (Technology/operations leadership alternative - high-compensation CSP/partner operations delivery leadership)
+- "poor_fit" (Poor fit - requires heavy formal PM tenure, wrong domain, mismatch, or low leverage)
+
+EXPLAIN THE 5 STRATEGIC DIMENSIONS:
+- why_apply: Why the candidate should apply
+- why_not_shortlisted: Why the candidate might not be shortlisted (unvarnished recruiter realism)
+- competitive_evidence: What concrete candidate evidence makes them competitive
+- gaps_to_address: What gaps the candidate must address in their positioning or interview
+- long_term_strategy_fit: Whether the role supports the long-term career trajectory towards Senior PM / Product Leadership
+
+Return a JSON object adhering to this schema:
 {
-  "summary": "Crisp 2-3 sentence executive recruiter assessment",
-  "strengths": ["fact-grounded strength 1", "fact-grounded strength 2"],
-  "verified_supporting_facts": ["exact candidate fact supporting this match"],
-  "transferable_skills": ["transferable capability 1", "transferable capability 2"],
-  "missing_skills": ["exact missing skill 1"],
-  "unmet_requirements": ["unmet requirement 1 (e.g. 5+ yrs formal B2B SaaS roadmap ownership)"],
-  "gaps": ["critical interview gap 1"],
+  "classification": "direct_pm" | "product_adjacent_stepping_stone" | "tech_ops_leadership" | "poor_fit",
+  "summary": "Crisp 2-3 sentence executive recruiter verdict",
+  "why_apply": "Specific reason why this opportunity warrants candidate application",
+  "why_not_shortlisted": "Honest recruiter perspective on why resume might be rejected or screened out",
+  "competitive_evidence": ["Verified fact/evidence 1", "Verified fact/evidence 2"],
+  "gaps_to_address": ["Critical gap 1 to address", "Critical gap 2"],
+  "long_term_strategy_fit": "Assessment of how this role accelerates or diverts the path to PM leadership",
+  "actual_responsibilities": ["Actual responsibility 1 deduced from JD", "Actual responsibility 2"],
+  "mandatory_requirements": ["Mandatory requirement 1", "Mandatory requirement 2"],
+  "preferred_requirements": ["Preferred requirement 1"],
+  "deal_breakers_or_missing_info": ["Missing salary / location mismatch / strict PM tenure requirement"],
+  "strengths": ["Key strength 1", "Key strength 2"],
+  "verified_supporting_facts": ["Specific verified candidate fact matched"],
+  "transferable_skills": ["Transferable skill from CSP/API operations"],
+  "missing_skills": ["Missing capability"],
+  "unmet_requirements": ["Unmet JD requirement"],
+  "gaps": ["Interview gap"],
   "transition_type": "Track A – Direct Product Management" | "Track B – Product-Adjacent Role (Product Ops/TPM)" | "Track C – Senior Technology & Partner Operations",
-  "compensation_attractiveness": "Assessment against ₹22-28 LPA target CTC and ~₹2L take-home",
-  "verdict": "High-conviction recruiter verdict: whether this opportunity is worth applying for and tactical positioning",
-  "interview_topics": ["targeted technical/product interview question 1", "targeted interview question 2"],
-  "matching_evidence": {}
+  "compensation_attractiveness": "Assessment against ₹22-28 LPA target CTC",
+  "verdict": "Clear, actionable recommendation verdict",
+  "interview_topics": ["Specific interview probe 1", "Specific interview probe 2"]
 }`;
 
   let semanticResult;
@@ -275,13 +329,34 @@ Return a JSON object with this exact structure:
     semanticResult = await generateStructuredJson({
       prompt,
       schema: SemanticIntelligenceSchema,
-      systemInstruction: 'You are an elite, skeptical executive recruiter. Evaluate transferable skills from Microsoft CSP operations and HelloPM prototypes. Never flatter or fabricate candidate qualifications.',
+      systemInstruction: 'You are CareerPilot Job Intelligence Agent: an elite, honest, and skeptical executive recruiter who evaluates career transition viability without confirmation bias or score inflation.',
       temperature: 0.15
     });
   } catch (err) {
     console.warn('[Intelligence Agent] Semantic analysis fallback to heuristic:', err);
+    const isPoorFit = /5\+|7\+|10\+/i.test(options.job.description) && /principal|staff|director|head/i.test(options.job.title);
+    const classification: OpportunityClassification = isPoorFit
+      ? 'poor_fit'
+      : assignedTrack === 'track_b'
+      ? 'product_adjacent_stepping_stone'
+      : assignedTrack === 'track_c'
+      ? 'tech_ops_leadership'
+      : 'direct_pm';
+
     semanticResult = {
+      classification,
       summary: `Evaluated ${options.job.title} at ${options.job.company}. Fit score: ${scoreResult.total}/100 (${scoreResult.recommendation}).`,
+      why_apply: `Leverage strong Microsoft CSP ecosystem and API operations background for ${options.job.company}.`,
+      why_not_shortlisted: 'Candidate lacks formal, titled B2B SaaS commercial PM roadmap ownership.',
+      competitive_evidence: options.verifiedFacts.slice(0, 3).map(f => f.fact),
+      gaps_to_address: ['Positioning digital project management and HelloPM AI prototypes as PM evidence'],
+      long_term_strategy_fit: classification === 'poor_fit'
+        ? 'Diverts focus or risks immediate rejection due to heavy prerequisite PM tenure.'
+        : 'Provides viable stepping stone into full product ownership.',
+      actual_responsibilities: ['Cross-functional stakeholder coordination', 'Technical requirements definition'],
+      mandatory_requirements: ['Experience with enterprise software platforms'],
+      preferred_requirements: ['Cloud platform and API knowledge'],
+      deal_breakers_or_missing_info: ['Compensation not explicitly listed in posting'],
       strengths: options.verifiedFacts.slice(0, 3).map(f => f.fact),
       verified_supporting_facts: options.verifiedFacts.slice(0, 2).map(f => f.fact),
       transferable_skills: ['Microsoft Partner Center platform workflows', 'REST APIs & GDAP', 'Cross-functional stakeholder management'],
@@ -296,17 +371,35 @@ Return a JSON object with this exact structure:
     };
   }
 
+  // 4. Strict scoring rule: Never inflate match scores for poor fits
+  let finalScore = scoreResult.total;
+  let finalRec = scoreResult.recommendation;
+  if (semanticResult.classification === 'poor_fit') {
+    finalScore = Math.min(finalScore, 44);
+    finalRec = 'ignore';
+  }
+
   const result: IntelligenceMatchResult = {
     job_id: options.job.id,
     user_id: options.profile.user_id,
-    total_score: scoreResult.total,
-    recommendation: scoreResult.recommendation,
+    total_score: finalScore,
+    recommendation: finalRec,
     confidence_level: scoreResult.confidence,
     score_breakdown: scoreResult.breakdown,
     track: assignedTrack,
+    classification: (semanticResult.classification as OpportunityClassification) || 'direct_pm',
     transition_type: semanticResult.transition_type,
     verdict: semanticResult.verdict,
     summary: semanticResult.summary,
+    why_apply: semanticResult.why_apply,
+    why_not_shortlisted: semanticResult.why_not_shortlisted,
+    competitive_evidence: semanticResult.competitive_evidence,
+    gaps_to_address: semanticResult.gaps_to_address,
+    long_term_strategy_fit: semanticResult.long_term_strategy_fit,
+    actual_responsibilities: semanticResult.actual_responsibilities,
+    mandatory_requirements: semanticResult.mandatory_requirements,
+    preferred_requirements: semanticResult.preferred_requirements,
+    deal_breakers_or_missing_info: semanticResult.deal_breakers_or_missing_info,
     strengths: semanticResult.strengths,
     verified_supporting_facts: semanticResult.verified_supporting_facts,
     transferable_skills: semanticResult.transferable_skills,
@@ -317,6 +410,16 @@ Return a JSON object with this exact structure:
     compensation_note: scoreResult.compensationNote,
     matching_evidence: {
       ...semanticResult.matching_evidence,
+      classification: semanticResult.classification,
+      why_apply: semanticResult.why_apply,
+      why_not_shortlisted: semanticResult.why_not_shortlisted,
+      competitive_evidence: semanticResult.competitive_evidence,
+      gaps_to_address: semanticResult.gaps_to_address,
+      long_term_strategy_fit: semanticResult.long_term_strategy_fit,
+      actual_responsibilities: semanticResult.actual_responsibilities,
+      mandatory_requirements: semanticResult.mandatory_requirements,
+      preferred_requirements: semanticResult.preferred_requirements,
+      deal_breakers_or_missing_info: semanticResult.deal_breakers_or_missing_info,
       transition_type: semanticResult.transition_type,
       verdict: semanticResult.verdict,
       verified_supporting_facts: semanticResult.verified_supporting_facts,
@@ -325,7 +428,7 @@ Return a JSON object with this exact structure:
     }
   };
 
-  // 4. Persist match in database if job_id and user_id are present
+  // 5. Persist match in database if job_id and user_id are present
   if (options.job.id && options.profile.user_id) {
     try {
       await db.from('job_matches').upsert({
@@ -334,6 +437,7 @@ Return a JSON object with this exact structure:
         total_score: result.total_score,
         score_breakdown: result.score_breakdown,
         track: assignedTrack,
+        classification: result.classification,
         strengths: result.strengths,
         gaps: result.gaps,
         recommendation: result.recommendation,
@@ -349,8 +453,18 @@ Return a JSON object with this exact structure:
         user_id: options.profile.user_id,
         agent_name: 'intelligence',
         status: 'completed',
-        input_summary: { jobId: options.job.id, jobTitle: options.job.title, track: assignedTrack },
-        output_summary: { score: result.total_score, recommendation: result.recommendation, verdict: result.verdict },
+        input_summary: {
+          jobId: options.job.id,
+          jobTitle: options.job.title,
+          track: assignedTrack,
+          classification: result.classification
+        },
+        output_summary: {
+          score: result.total_score,
+          recommendation: result.recommendation,
+          classification: result.classification,
+          verdict: result.verdict
+        },
         duration_ms: Date.now() - startTime
       });
     } catch (saveErr) {
@@ -360,3 +474,4 @@ Return a JSON object with this exact structure:
 
   return result;
 }
+

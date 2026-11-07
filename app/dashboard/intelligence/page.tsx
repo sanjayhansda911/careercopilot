@@ -9,12 +9,13 @@ export default function JobIntelligencePage() {
   const [loading, setLoading] = useState(true);
   const [filterRec, setFilterRec] = useState('all');
   const [filterTrack, setFilterTrack] = useState('all');
+  const [filterClassification, setFilterClassification] = useState('all');
   const [selectedMatch, setSelectedMatch] = useState<any | null>(null);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
 
   useEffect(() => {
     fetchMatches();
-  }, [filterRec, filterTrack]);
+  }, [filterRec, filterTrack, filterClassification]);
 
   async function fetchMatches() {
     setLoading(true);
@@ -23,6 +24,7 @@ export default function JobIntelligencePage() {
       const params = new URLSearchParams();
       if (filterRec !== 'all') params.append('recommendation', filterRec);
       if (filterTrack !== 'all') params.append('track', filterTrack);
+      if (filterClassification !== 'all') params.append('classification', filterClassification);
       if (params.toString()) url += `?${params.toString()}`;
 
       const res = await fetch(url);
@@ -76,44 +78,46 @@ export default function JobIntelligencePage() {
           <div>
             <div className="flex items-center space-x-2">
               <span className="rounded-md bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-800">Agent 2</span>
-              <h1 className="text-2xl font-bold text-slate-900">Career Opportunity Intelligence</h1>
+              <h1 className="text-2xl font-bold text-slate-900">Job Intelligence Agent</h1>
             </div>
             <p className="mt-1 text-sm text-slate-500">
-              Executive recruiter evaluation across Direct PM, Product-Adjacent, and Senior Tech Ops Leadership tracks.
+              Independent, evidence-backed evaluation across 4 strategic opportunity buckets. Zero score inflation.
             </p>
           </div>
 
-          {/* Track Filters */}
+          {/* Classification Filters */}
           <div className="flex flex-wrap items-center gap-1.5">
             {[
-              { id: 'all', label: 'All Tracks' },
-              { id: 'track_a', label: 'Track A: Direct PM' },
-              { id: 'track_b', label: 'Track B: Product-Adjacent' },
-              { id: 'track_c', label: 'Track C: Senior Ops' }
-            ].map(t => (
+              { id: 'all', label: 'All Opportunities' },
+              { id: 'direct_pm', label: '🎯 Direct PM' },
+              { id: 'product_adjacent_stepping_stone', label: '🪜 Stepping Stone' },
+              { id: 'tech_ops_leadership', label: '💼 Ops Leadership' },
+              { id: 'poor_fit', label: '🚫 Poor Fit' }
+            ].map(c => (
               <button
-                key={t.id}
-                onClick={() => setFilterTrack(t.id)}
+                key={c.id}
+                onClick={() => setFilterClassification(c.id)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  filterTrack === t.id
+                  filterClassification === c.id
                     ? 'bg-slate-900 text-white shadow-sm'
                     : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
                 }`}
               >
-                {t.label}
+                {c.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Recommendation Score Filter Bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-1.5">
+        {/* Track & Recommendation Score Filter Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-1.5">
             {[
               { id: 'all', label: 'All Scores' },
               { id: 'apply_now', label: 'Strong Match (80-100)' },
               { id: 'review', label: 'Worth Reviewing (65-79)' },
-              { id: 'stretch', label: 'Stretch (50-64)' }
+              { id: 'stretch', label: 'Stretch (50-64)' },
+              { id: 'ignore', label: 'Low Priority / Filtered (<50)' }
             ].map(r => (
               <button
                 key={r.id}
@@ -128,8 +132,29 @@ export default function JobIntelligencePage() {
               </button>
             ))}
           </div>
+
+          <div className="flex items-center space-x-1.5">
+            {[
+              { id: 'all', label: 'All Tracks' },
+              { id: 'track_a', label: 'Track A (PM)' },
+              { id: 'track_b', label: 'Track B (Adj)' },
+              { id: 'track_c', label: 'Track C (Ops)' }
+            ].map(t => (
+              <button
+                key={t.id}
+                onClick={() => setFilterTrack(t.id)}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                  filterTrack === t.id
+                    ? 'bg-slate-800 text-white font-bold'
+                    : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           <span className="text-xs font-medium text-slate-500">
-            {matches.length} qualified opportunit{matches.length === 1 ? 'y' : 'ies'}
+            {matches.length} opportunit{matches.length === 1 ? 'y' : 'ies'} evaluated
           </span>
         </div>
 
@@ -151,6 +176,15 @@ export default function JobIntelligencePage() {
                 const isSelected = selectedMatch?.id === m.id;
                 const isHyd = /hyderabad/i.test(m.jobs?.location || '');
                 const isRem = /remote/i.test(m.jobs?.work_mode || '') || /remote/i.test(m.jobs?.location || '');
+                const classification = m.classification || m.matching_evidence?.classification || 'direct_pm';
+
+                const classificationBadgeMap: Record<string, { label: string; bg: string }> = {
+                  direct_pm: { label: '🎯 Direct PM', bg: 'bg-purple-100 text-purple-800' },
+                  product_adjacent_stepping_stone: { label: '🪜 Stepping Stone', bg: 'bg-sky-100 text-sky-800' },
+                  tech_ops_leadership: { label: '💼 Ops Leadership', bg: 'bg-amber-100 text-amber-800' },
+                  poor_fit: { label: '🚫 Poor Fit', bg: 'bg-rose-100 text-rose-800' }
+                };
+                const classificationBadge = classificationBadgeMap[classification] || classificationBadgeMap.direct_pm;
 
                 return (
                   <div
@@ -168,6 +202,7 @@ export default function JobIntelligencePage() {
                         <p className="text-[11px] font-medium text-slate-600 truncate">{m.jobs?.company}</p>
                       </div>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-black shrink-0 ${
+                        classification === 'poor_fit' ? 'bg-rose-100 text-rose-800' :
                         m.total_score >= 80 ? 'bg-emerald-100 text-emerald-800' :
                         m.total_score >= 65 ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'
                       }`}>
@@ -175,13 +210,10 @@ export default function JobIntelligencePage() {
                       </span>
                     </div>
 
-                    {/* Location & Track Pills */}
+                    {/* Classification & Location Pills */}
                     <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px]">
-                      <span className={`px-2 py-0.5 rounded font-semibold ${
-                        m.track === 'track_a' ? 'bg-purple-100 text-purple-800' :
-                        m.track === 'track_b' ? 'bg-sky-100 text-sky-800' : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {m.track === 'track_a' ? 'Track A: Direct PM' : m.track === 'track_b' ? 'Track B: Product-Adjacent' : 'Track C: Senior Ops'}
+                      <span className={`px-2 py-0.5 rounded font-semibold ${classificationBadge.bg}`}>
+                        {classificationBadge.label}
                       </span>
                       {isHyd ? (
                         <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">
@@ -211,19 +243,27 @@ export default function JobIntelligencePage() {
             {/* Right Column: Deep-Dive Analysis for Selected Match */}
             {selectedMatch && (
               <div className="space-y-5 lg:col-span-2">
-                {/* Score & Header Banner */}
+                {/* Header Banner */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
                   <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                          selectedMatch.track === 'track_a' ? 'bg-purple-100 text-purple-800' :
-                          selectedMatch.track === 'track_b' ? 'bg-sky-100 text-sky-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {selectedMatch.track === 'track_a' ? 'Track A: Direct Product Management' :
-                           selectedMatch.track === 'track_b' ? 'Track B: Product-Adjacent Role' :
-                           'Track C: Senior Technology & Partner Operations'}
-                        </span>
+                        {(() => {
+                          const cls = selectedMatch.classification || selectedMatch.matching_evidence?.classification || 'direct_pm';
+                          const clsInfoMap: Record<string, { label: string; bg: string }> = {
+                            direct_pm: { label: '🎯 Direct PM Opportunity', bg: 'bg-purple-100 text-purple-900 border-purple-200' },
+                            product_adjacent_stepping_stone: { label: '🪜 Product-Adjacent Stepping Stone', bg: 'bg-sky-100 text-sky-900 border-sky-200' },
+                            tech_ops_leadership: { label: '💼 Technology/Operations Leadership Alternative', bg: 'bg-amber-100 text-amber-900 border-amber-200' },
+                            poor_fit: { label: '🚫 Poor Fit (Honest Recruiter Audit)', bg: 'bg-rose-100 text-rose-900 border-rose-200' }
+                          };
+                          const clsInfo = clsInfoMap[cls] || clsInfoMap.direct_pm;
+
+                          return (
+                            <span className={`rounded-full px-3 py-0.5 text-[11px] font-bold border ${clsInfo.bg}`}>
+                              {clsInfo.label}
+                            </span>
+                          );
+                        })()}
                         <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
                           {selectedMatch.recommendation?.replace('_', ' ')}
                         </span>
@@ -259,18 +299,18 @@ export default function JobIntelligencePage() {
                     </div>
                   </div>
 
-                  {/* Recruiter Verdict Card */}
+                  {/* Recruiter Summary Card */}
                   <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 space-y-2">
                     <div className="flex items-center space-x-2">
                       <span className="text-base">🎯</span>
                       <h3 className="text-xs font-bold uppercase tracking-wider text-blue-900">Executive Recruiter Verdict</h3>
                     </div>
                     <p className="text-xs font-medium text-blue-950 leading-relaxed">
-                      {selectedMatch.matching_evidence?.verdict || selectedMatch.summary || 'Strong candidate-job fit.'}
+                      {selectedMatch.matching_evidence?.verdict || selectedMatch.summary || 'Candidate evaluation complete.'}
                     </p>
                     {selectedMatch.matching_evidence?.compensation_attractiveness && (
                       <p className="text-[11px] text-blue-800 font-semibold pt-1 border-t border-blue-200/60">
-                        💰 Compensation Fit: {selectedMatch.matching_evidence.compensation_attractiveness}
+                        💰 Compensation Alignment: {selectedMatch.matching_evidence.compensation_attractiveness}
                       </p>
                     )}
                   </div>
@@ -313,49 +353,123 @@ export default function JobIntelligencePage() {
                   )}
                 </div>
 
-                {/* Evidence & Transferable Skills */}
+                {/* The 5 Strategic Explanations (Core Charter) */}
+                <div className="grid gap-4 md:grid-cols-2">
+                  {/* Why Apply */}
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-sm space-y-2">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-base">📌</span>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-900">Why the Candidate Should Apply</h3>
+                    </div>
+                    <p className="text-xs text-emerald-950 leading-relaxed font-medium">
+                      {selectedMatch.why_apply || selectedMatch.matching_evidence?.why_apply || 'Leverages candidate cloud ecosystem and API operations foundation.'}
+                    </p>
+                  </div>
+
+                  {/* Why Not Shortlisted */}
+                  <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-5 shadow-sm space-y-2">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-base">⚠️</span>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-rose-900">Why the Candidate Might Not Be Shortlisted</h3>
+                    </div>
+                    <p className="text-xs text-rose-950 leading-relaxed font-medium">
+                      {selectedMatch.why_not_shortlisted || selectedMatch.matching_evidence?.why_not_shortlisted || 'Candidate lacks formal, titled B2B SaaS commercial PM roadmap ownership.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Long-Term Career Strategy Fit */}
+                {(selectedMatch.long_term_strategy_fit || selectedMatch.matching_evidence?.long_term_strategy_fit) && (
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-5 shadow-sm space-y-2">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-base">🧭</span>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-900">Long-Term Career Strategy Alignment</h3>
+                    </div>
+                    <p className="text-xs text-indigo-950 leading-relaxed font-medium">
+                      {selectedMatch.long_term_strategy_fit || selectedMatch.matching_evidence?.long_term_strategy_fit}
+                    </p>
+                  </div>
+                )}
+
+                {/* Competitive Evidence & Gaps */}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-xl border border-emerald-200 bg-white p-5 shadow-sm space-y-2">
                     <div className="flex items-center space-x-1.5">
-                      <span className="text-sm">✅</span>
-                      <h3 className="text-xs font-bold uppercase text-emerald-800">Verified Candidate Supporting Facts</h3>
+                      <span className="text-sm">🏆</span>
+                      <h3 className="text-xs font-bold uppercase text-emerald-800">Competitive Evidence (Verified Facts)</h3>
                     </div>
                     <ul className="list-disc space-y-1.5 pl-4 text-xs text-emerald-950">
-                      {((selectedMatch.matching_evidence?.verified_supporting_facts?.length
-                        ? selectedMatch.matching_evidence.verified_supporting_facts
-                        : selectedMatch.strengths) || []).map((s: string, idx: number) => (
+                      {((selectedMatch.competitive_evidence?.length ? selectedMatch.competitive_evidence :
+                         selectedMatch.matching_evidence?.competitive_evidence?.length ? selectedMatch.matching_evidence.competitive_evidence :
+                         selectedMatch.matching_evidence?.verified_supporting_facts?.length ? selectedMatch.matching_evidence.verified_supporting_facts :
+                         selectedMatch.strengths) || []).map((s: string, idx: number) => (
                         <li key={idx}>{s}</li>
                       ))}
                     </ul>
                   </div>
 
-                  <div className="rounded-xl border border-sky-200 bg-white p-5 shadow-sm space-y-2">
+                  <div className="rounded-xl border border-amber-200 bg-white p-5 shadow-sm space-y-2">
                     <div className="flex items-center space-x-1.5">
-                      <span className="text-sm">🔄</span>
-                      <h3 className="text-xs font-bold uppercase text-sky-800">Transferable Operations Capabilities</h3>
+                      <span className="text-sm">🛠️</span>
+                      <h3 className="text-xs font-bold uppercase text-amber-800">Critical Gaps the Candidate Must Address</h3>
                     </div>
-                    <ul className="list-disc space-y-1.5 pl-4 text-xs text-sky-950">
-                      {(selectedMatch.transferable_skills || []).map((t: string, idx: number) => (
-                        <li key={idx}>{t}</li>
+                    <ul className="list-disc space-y-1.5 pl-4 text-xs text-amber-950">
+                      {((selectedMatch.gaps_to_address?.length ? selectedMatch.gaps_to_address :
+                         selectedMatch.matching_evidence?.gaps_to_address?.length ? selectedMatch.matching_evidence.gaps_to_address :
+                         selectedMatch.matching_evidence?.unmet_requirements?.length ? selectedMatch.matching_evidence.unmet_requirements :
+                         selectedMatch.gaps) || []).map((g: string, idx: number) => (
+                        <li key={idx}>{g}</li>
                       ))}
                     </ul>
                   </div>
                 </div>
 
-                {/* Unmet Requirements & Strategic Gaps */}
-                <div className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm space-y-2">
-                  <div className="flex items-center space-x-1.5">
-                    <span className="text-sm">⚠️</span>
-                    <h3 className="text-xs font-bold uppercase text-rose-800">Unmet Requirements & Candidate Gaps (Honest Recruiter Audit)</h3>
+                {/* 10-Step Protocol: Actual Responsibilities vs Title & Requirements */}
+                {((selectedMatch.actual_responsibilities?.length || selectedMatch.matching_evidence?.actual_responsibilities?.length) ||
+                  (selectedMatch.deal_breakers_or_missing_info?.length || selectedMatch.matching_evidence?.deal_breakers_or_missing_info?.length)) && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-2">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-sm">🔍</span>
+                        <h3 className="text-xs font-bold uppercase text-slate-800">Actual Responsibilities (vs Superficial Title)</h3>
+                      </div>
+                      <ul className="list-disc space-y-1.5 pl-4 text-xs text-slate-700">
+                        {((selectedMatch.actual_responsibilities?.length ? selectedMatch.actual_responsibilities :
+                           selectedMatch.matching_evidence?.actual_responsibilities) || []).map((r: string, idx: number) => (
+                          <li key={idx}>{r}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm space-y-2">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-sm">🚨</span>
+                        <h3 className="text-xs font-bold uppercase text-rose-800">Deal-Breakers & Missing Information</h3>
+                      </div>
+                      <ul className="list-disc space-y-1.5 pl-4 text-xs text-rose-950">
+                        {((selectedMatch.deal_breakers_or_missing_info?.length ? selectedMatch.deal_breakers_or_missing_info :
+                           selectedMatch.matching_evidence?.deal_breakers_or_missing_info) || ['No critical deal-breakers identified']).map((d: string, idx: number) => (
+                          <li key={idx}>{d}</li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                  <ul className="list-disc space-y-1.5 pl-4 text-xs text-rose-950">
-                    {((selectedMatch.matching_evidence?.unmet_requirements?.length
-                      ? selectedMatch.matching_evidence.unmet_requirements
-                      : selectedMatch.gaps) || []).map((g: string, idx: number) => (
-                      <li key={idx}>{g}</li>
-                    ))}
-                  </ul>
-                </div>
+                )}
+
+                {/* Transferable Skills */}
+                {selectedMatch.transferable_skills && selectedMatch.transferable_skills.length > 0 && (
+                  <div className="rounded-xl border border-sky-200 bg-white p-5 shadow-sm space-y-2">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-sm">🔄</span>
+                      <h3 className="text-xs font-bold uppercase text-sky-800">Transferable Capabilities from Cloud Operations</h3>
+                    </div>
+                    <ul className="list-disc space-y-1.5 pl-4 text-xs text-sky-950">
+                      {selectedMatch.transferable_skills.map((t: string, idx: number) => (
+                        <li key={idx}>{t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {/* Targeted Interview Questions */}
                 {selectedMatch.interview_topics && selectedMatch.interview_topics.length > 0 && (

@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
     const minScore = parseInt(searchParams.get('minScore') || '0', 10);
     const recommendation = searchParams.get('recommendation');
     const track = searchParams.get('track');
+    const classification = searchParams.get('classification');
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -29,6 +30,10 @@ export async function GET(req: NextRequest) {
 
     if (track && track !== 'all') {
       query = query.eq('track', track);
+    }
+
+    if (classification && classification !== 'all') {
+      query = query.eq('classification', classification);
     }
 
     query = query.order('total_score', { ascending: false });
