@@ -9,16 +9,25 @@ import { createMockSupabaseClient } from './mock-store';
  * by extracting and updating cookies from the incoming Next.js request.
  */
 export async function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = 
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 
+    process.env.SUPABASE_URL;
 
-  if (url?.includes('dummy') || !url) {
+  const anonKey = 
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+    process.env.SUPABASE_ANON_KEY || 
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 
+    process.env.SUPABASE_PUBLISHABLE_KEY || 
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 
+    process.env.SUPABASE_SECRET_KEY;
+
+  if (!url || !anonKey || url.includes('dummy')) {
     return createMockSupabaseClient() as any;
   }
 
   const cookieStore = await cookies();
 
-  return createServerClient(url, anonKey || '', {
+  return createServerClient(url, anonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -42,16 +51,19 @@ export async function createClient() {
  * Bypasses RLS. NEVER expose to client.
  */
 export function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = 
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 
+    process.env.SUPABASE_URL;
 
-  if (url?.includes('dummy') || !url) {
+  const key = 
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 
+    process.env.SUPABASE_SECRET_KEY || 
+    process.env.SUPABASE_KEY;
+
+  if (!url || !key || url.includes('dummy')) {
     return createMockSupabaseClient() as any;
   }
 
-  if (!key) {
-    throw new Error('Supabase server environment variable SUPABASE_SERVICE_ROLE_KEY is missing.');
-  }
   return createSupabaseClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false }
   });

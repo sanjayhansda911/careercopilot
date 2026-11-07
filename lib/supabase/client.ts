@@ -2,12 +2,19 @@ import { createBrowserClient } from '@supabase/ssr';
 import { createMockSupabaseClient } from './mock-store';
 
 export function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = 
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 
+    process.env.SUPABASE_URL;
 
-  if (url?.includes('dummy') || !url) {
+  const anonKey = 
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+    process.env.SUPABASE_ANON_KEY || 
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 
+    process.env.SUPABASE_PUBLISHABLE_KEY;
+
+  if (!url || !anonKey || url.includes('dummy')) {
     return createMockSupabaseClient() as any;
   }
 
-  return createBrowserClient(url, anonKey || '');
+  return createBrowserClient(url, anonKey);
 }
