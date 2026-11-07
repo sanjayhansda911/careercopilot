@@ -1,5 +1,4 @@
 # CareerPilot MVP
-
 Personal cloud career intelligence application. Initial resume strategy: **Product Management**. Database: **Supabase**.
 
 ## MVP scope
